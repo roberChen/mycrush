@@ -25,12 +25,12 @@ These are always available without user configuration.
 ## Adding a New Builtin Skill
 
 1. Create `internal/skills/builtin/<skill-name>/SKILL.md` with YAML frontmatter
-   (`name`, `description`) and markdown instructions. The directory name must
-   match the `name` field.
+  (`name`, `description`) and markdown instructions. The directory name must
+  match the `name` field.
 2. No extra wiring needed — `//go:embed builtin/*` picks up new directories
-   automatically.
+  automatically.
 3. Add a test assertion in `TestDiscoverBuiltin` in
-   `internal/skills/skills_test.go` to verify discovery.
+  `internal/skills/skills_test.go` to verify discovery.
 4. Build and test: `go build . && go test ./internal/skills/...`
 
 ## Existing Builtin Skills

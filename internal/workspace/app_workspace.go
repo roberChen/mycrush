@@ -106,6 +106,14 @@ func (w *AppWorkspace) RestoreMessages(ctx context.Context, messages []message.M
 	return w.app.Messages.RestoreMessages(ctx, messages)
 }
 
+func (w *AppWorkspace) GetInheritedMessageCount(sessionID string) int {
+	sess, err := w.app.Sessions.Get(context.Background(), sessionID)
+	if err != nil {
+		return 0
+	}
+	return int(sess.InheritedMessageCount)
+}
+
 // -- Agent --
 
 func (w *AppWorkspace) AgentRun(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) error {

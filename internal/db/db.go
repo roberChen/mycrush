@@ -141,6 +141,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateSessionTitleAndUsageStmt, err = db.PrepareContext(ctx, updateSessionTitleAndUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateSessionTitleAndUsage: %w", err)
 	}
+	if q.updateSessionInheritedCountStmt, err = db.PrepareContext(ctx, updateSessionInheritedCount); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateSessionInheritedCount: %w", err)
+	}
 	return &q, nil
 }
 
@@ -341,6 +344,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateSessionTitleAndUsageStmt: %w", cerr)
 		}
 	}
+	if q.updateSessionInheritedCountStmt != nil {
+		if cerr := q.updateSessionInheritedCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateSessionInheritedCountStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -418,7 +426,8 @@ type Queries struct {
 	restoreMessageStmt             *sql.Stmt
 	updateMessageStmt              *sql.Stmt
 	updateSessionStmt              *sql.Stmt
-	updateSessionTitleAndUsageStmt *sql.Stmt
+	updateSessionTitleAndUsageStmt   *sql.Stmt
+	updateSessionInheritedCountStmt *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -463,6 +472,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		restoreMessageStmt:             q.restoreMessageStmt,
 		updateMessageStmt:              q.updateMessageStmt,
 		updateSessionStmt:              q.updateSessionStmt,
-		updateSessionTitleAndUsageStmt: q.updateSessionTitleAndUsageStmt,
+		updateSessionTitleAndUsageStmt:   q.updateSessionTitleAndUsageStmt,
+		updateSessionInheritedCountStmt: q.updateSessionInheritedCountStmt,
 	}
 }

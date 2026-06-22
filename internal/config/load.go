@@ -543,6 +543,14 @@ func (c *Config) setDefaults(workingDir, dataDir string) {
 	// Project specific skills dirs.
 	c.Options.SkillsPaths = append(c.Options.SkillsPaths, ProjectSkillsDir(workingDir)...)
 
+	// Add the default custom agentic tool directories if not already present.
+	for _, dir := range GlobalCustomAgentToolsDirs() {
+		if !slices.Contains(c.Options.CustomAgentToolsPaths, dir) {
+			c.Options.CustomAgentToolsPaths = append(c.Options.CustomAgentToolsPaths, dir)
+		}
+	}
+	c.Options.CustomAgentToolsPaths = append(c.Options.CustomAgentToolsPaths, ProjectCustomAgentToolsDir(workingDir)...)
+
 	if str, ok := os.LookupEnv("CRUSH_DISABLE_PROVIDER_AUTO_UPDATE"); ok {
 		c.Options.DisableProviderAutoUpdate, _ = strconv.ParseBool(str)
 	}
@@ -1203,6 +1211,42 @@ func ProjectSkillsDir(workingDir string) []string {
 		}
 	}
 
+	return dirs
+}
+
+// projectAgentToolsSubdirs lists the conventional subdirectories where
+// project-level custom agentic tool definitions are discovered.
+var projectAgentToolsSubdirs = []string{
+	".agents/agent_tools",
+	".crush/agent_tools",
+}
+
+// GlobalCustomAgentToolsDirs returns the default global directories for
+// custom agentic tool definitions.
+func GlobalCustomAgentToolsDirs() []string {
+	if crushTools := os.Getenv("CRUSH_AGENT_TOOLS_DIR"); crushTools != "" {
+		return []string{crushTools}
+	}
+	return []string{
+		filepath.Join(home.Config(), appName, "agent_tools"),
+		filepath.Join(home.Dir(), ".agents", "agent_tools"),
+	}
+}
+
+// ProjectCustomAgentToolsDir returns the default project directories in
+// which Crush will look for custom agentic tool definitions. As with
+// skills, the git work-tree root is also checked so monorepo-level tool
+// definitions are discovered from subdirectories.
+func ProjectCustomAgentToolsDir(workingDir string) []string {
+	dirs := make([]string, 0, len(projectAgentToolsSubdirs)*2)
+	for _, sub := range projectAgentToolsSubdirs {
+		dirs = append(dirs, filepath.Join(workingDir, sub))
+	}
+	if root := worktreeRoot(workingDir); root != "" && root != workingDir {
+		for _, sub := range projectAgentToolsSubdirs {
+			dirs = append(dirs, filepath.Join(root, sub))
+		}
+	}
 	return dirs
 }
 
