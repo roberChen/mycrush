@@ -154,12 +154,12 @@ func quickStyle(o quickStyleOpts) Styles {
 				// BlockSuffix: "\n",
 				Color: hex(o.fgSubtle),
 			},
-			// Margin: new(uint(defaultMargin)),
+			// Margin: ptr(uint(defaultMargin)),
 		},
 		BlockQuote: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{},
-			Indent:         new(uint(1)),
-			IndentToken:    new("│ "),
+			Indent:         ptr(uint(1)),
+			IndentToken:    ptr("│ "),
 		},
 		List: ansi.StyleList{
 			LevelIndent: defaultListIndent,
@@ -168,7 +168,7 @@ func quickStyle(o quickStyleOpts) Styles {
 			StylePrimitive: ansi.StylePrimitive{
 				BlockSuffix: "\n",
 				Color:       hex(o.info),
-				Bold:        new(true),
+				Bold:        ptr(true),
 			},
 		},
 		H1: ansi.StyleBlock{
@@ -177,7 +177,7 @@ func quickStyle(o quickStyleOpts) Styles {
 				Suffix:          " ",
 				Color:           hex(o.warningSubtle),
 				BackgroundColor: hex(o.primary),
-				Bold:            new(true),
+				Bold:            ptr(true),
 			},
 		},
 		H2: ansi.StyleBlock{
@@ -204,17 +204,17 @@ func quickStyle(o quickStyleOpts) Styles {
 			StylePrimitive: ansi.StylePrimitive{
 				Prefix: "###### ",
 				Color:  hex(o.successMostSubtle),
-				Bold:   new(false),
+				Bold:   ptr(false),
 			},
 		},
 		Strikethrough: ansi.StylePrimitive{
-			CrossedOut: new(true),
+			CrossedOut: ptr(true),
 		},
 		Emph: ansi.StylePrimitive{
-			Italic: new(true),
+			Italic: ptr(true),
 		},
 		Strong: ansi.StylePrimitive{
-			Bold: new(true),
+			Bold: ptr(true),
 		},
 		HorizontalRule: ansi.StylePrimitive{
 			Color:  hex(o.separator),
@@ -233,15 +233,15 @@ func quickStyle(o quickStyleOpts) Styles {
 		},
 		Link: ansi.StylePrimitive{
 			Color:     hex(charmtone.Zinc),
-			Underline: new(true),
+			Underline: ptr(true),
 		},
 		LinkText: ansi.StylePrimitive{
 			Color: hex(o.successMostSubtle),
-			Bold:  new(true),
+			Bold:  ptr(true),
 		},
 		Image: ansi.StylePrimitive{
 			Color:     hex(charmtone.Cheeky),
-			Underline: new(true),
+			Underline: ptr(true),
 		},
 		ImageText: ansi.StylePrimitive{
 			Color:  hex(o.fgMoreSubtle),
@@ -260,7 +260,7 @@ func quickStyle(o quickStyleOpts) Styles {
 				StylePrimitive: ansi.StylePrimitive{
 					Color: hex(o.bgLessVisible),
 				},
-				Margin: new(uint(defaultMargin)),
+				Margin: ptr(uint(defaultMargin)),
 			},
 			Chroma: &ansi.Chroma{
 				Text: ansi.StylePrimitive{
@@ -308,8 +308,8 @@ func quickStyle(o quickStyleOpts) Styles {
 				},
 				NameClass: ansi.StylePrimitive{
 					Color:     hex(charmtone.Salt),
-					Underline: new(true),
-					Bold:      new(true),
+					Underline: ptr(true),
+					Bold:      ptr(true),
 				},
 				NameDecorator: ansi.StylePrimitive{
 					Color: hex(charmtone.Citron),
@@ -330,13 +330,13 @@ func quickStyle(o quickStyleOpts) Styles {
 					Color: hex(o.destructive),
 				},
 				GenericEmph: ansi.StylePrimitive{
-					Italic: new(true),
+					Italic: ptr(true),
 				},
 				GenericInserted: ansi.StylePrimitive{
 					Color: hex(o.successMostSubtle),
 				},
 				GenericStrong: ansi.StylePrimitive{
-					Bold: new(true),
+					Bold: ptr(true),
 				},
 				GenericSubheading: ansi.StylePrimitive{
 					Color: hex(o.fgMoreSubtle),
@@ -371,8 +371,8 @@ func quickStyle(o quickStyleOpts) Styles {
 				Color:           plainFg,
 				BackgroundColor: plainBg,
 			},
-			Indent:      new(uint(1)),
-			IndentToken: new("│ "),
+			Indent:      ptr(uint(1)),
+			IndentToken: ptr("│ "),
 		},
 		List: ansi.StyleList{
 			LevelIndent: defaultListIndent,
@@ -380,7 +380,7 @@ func quickStyle(o quickStyleOpts) Styles {
 		Heading: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				BlockSuffix:     "\n",
-				Bold:            new(true),
+				Bold:            ptr(true),
 				Color:           plainFg,
 				BackgroundColor: plainBg,
 			},
@@ -389,7 +389,7 @@ func quickStyle(o quickStyleOpts) Styles {
 			StylePrimitive: ansi.StylePrimitive{
 				Prefix:          " ",
 				Suffix:          " ",
-				Bold:            new(true),
+				Bold:            ptr(true),
 				Color:           plainFg,
 				BackgroundColor: plainBg,
 			},
@@ -430,17 +430,17 @@ func quickStyle(o quickStyleOpts) Styles {
 			},
 		},
 		Strikethrough: ansi.StylePrimitive{
-			CrossedOut:      new(true),
+			CrossedOut:      ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
 		Emph: ansi.StylePrimitive{
-			Italic:          new(true),
+			Italic:          ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
 		Strong: ansi.StylePrimitive{
-			Bold:            new(true),
+			Bold:            ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
@@ -468,17 +468,17 @@ func quickStyle(o quickStyleOpts) Styles {
 			Unticked: "[ ] ",
 		},
 		Link: ansi.StylePrimitive{
-			Underline:       new(true),
+			Underline:       ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
 		LinkText: ansi.StylePrimitive{
-			Bold:            new(true),
+			Bold:            ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
 		Image: ansi.StylePrimitive{
-			Underline:       new(true),
+			Underline:       ptr(true),
 			Color:           plainFg,
 			BackgroundColor: plainBg,
 		},
@@ -501,7 +501,7 @@ func quickStyle(o quickStyleOpts) Styles {
 					Color:           plainFg,
 					BackgroundColor: plainBg,
 				},
-				Margin: new(uint(defaultMargin)),
+				Margin: ptr(uint(defaultMargin)),
 			},
 		},
 		Table: ansi.StyleTable{

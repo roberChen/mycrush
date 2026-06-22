@@ -47,6 +47,7 @@ type Querier interface {
 	RestoreMessage(ctx context.Context, arg RestoreMessageParams) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
+	UpdateSessionInheritedCount(ctx context.Context, arg UpdateSessionInheritedCountParams) error
 	UpdateSessionTitleAndUsage(ctx context.Context, arg UpdateSessionTitleAndUsageParams) error
 }
 
