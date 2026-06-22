@@ -612,6 +612,14 @@ func hex(c color.Color) *string {
 	return &s
 }
 
+// ptr returns a pointer to v. It is the generic equivalent of Go 1.26's
+// new(v) and is used to satisfy glamour's pointer fields (*bool, *uint,
+// *string) from literal values. Using this helper instead of new(v) keeps
+// gopls versions that predate the Go 1.26 new-generalization happy.
+func ptr[T any](v T) *T {
+	return &v
+}
+
 func chromaStyle(style ansi.StylePrimitive) string {
 	var s strings.Builder
 

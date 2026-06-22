@@ -82,6 +82,7 @@ type Workspace interface {
 	ListAllUserMessages(ctx context.Context) ([]message.Message, error)
 	DeleteMessagesAfter(ctx context.Context, sessionID, messageID string) error
 	RestoreMessages(ctx context.Context, messages []message.Message) error
+	GetInheritedMessageCount(sessionID string) int
 
 	// Agent
 	AgentRun(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) error
