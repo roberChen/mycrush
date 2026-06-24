@@ -72,6 +72,11 @@ var (
 	orphanThinkTagRegex = regexp.MustCompile(`</?think>`)
 )
 
+// PlaceholderToolName is used when a model hallucinates a tool call without
+// a valid name. The placeholder makes the persisted tool call formally valid
+// so the provider doesn't reject subsequent requests carrying this history.
+const PlaceholderToolName = "invalid_tool_call"
+
 type SessionAgentCall struct {
 	SessionID string
 	// RunID, when non-empty, is the caller-supplied correlator that
@@ -726,6 +731,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	// message of the turn is the value reachable through this
 	// pointer when the defer runs.
 	var currentAssistant *message.Message
+	// hallucinatedToolCallIDs tracks tool call IDs whose name was empty (model
+	// hallucination). These receive a placeholder name and a synthetic error
+	// tool result so the conversation history stays well-formed.
+	hallucinatedToolCallIDs := make(map[string]bool)
 	// Drain any debounced message updates before returning. message.Service
 	// already flushes synchronously on terminal updates, but a defer here
 	// guarantees the contract at every Run exit (success, error, panic
@@ -910,6 +919,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			return a.messages.Update(genCtx, *currentAssistant)
 		},
 		OnToolInputStart: func(id string, toolName string) error {
+			if toolName == "" {
+				toolName = PlaceholderToolName
+				hallucinatedToolCallIDs[id] = true
+				slog.Warn("Model emitted tool call with empty name, using placeholder", "tool_call_id", id)
+			}
 			toolCall := message.ToolCall{
 				ID:               id,
 				Name:             toolName,
@@ -925,13 +939,19 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			slog.Warn("Provider request failed, retrying", providerRetryLogFields(err, delay)...)
 		},
 		OnToolCall: func(tc fantasy.ToolCallContent) error {
-			input, wasSanitized := sanitizeToolInput(tc.ToolName, tc.ToolCallID, tc.Input)
+			toolName := tc.ToolName
+			if toolName == "" {
+				toolName = PlaceholderToolName
+				hallucinatedToolCallIDs[tc.ToolCallID] = true
+				slog.Warn("Model emitted tool call with empty name, using placeholder", "tool_call_id", tc.ToolCallID)
+			}
+			input, wasSanitized := sanitizeToolInput(toolName, tc.ToolCallID, tc.Input)
 			if wasSanitized {
 				sanitizedToolCalls[tc.ToolCallID] = true
 			}
 			toolCall := message.ToolCall{
 				ID:               tc.ToolCallID,
-				Name:             tc.ToolName,
+				Name:             toolName,
 				Input:            input,
 				ProviderExecuted: false,
 				Finished:         true,
@@ -939,9 +959,38 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			currentAssistant.AddToolCall(toolCall)
 			// Use parent ctx instead of genCtx to ensure the update succeeds
 			// even if the request is canceled mid-stream
-			return a.messages.Update(ctx, *currentAssistant)
+			if err := a.messages.Update(ctx, *currentAssistant); err != nil {
+				return err
+			}
+			// If this was a hallucinated tool call (empty name), create a
+			// synthetic error tool result immediately so the conversation
+			// history stays well-formed and the provider won't reject
+			// subsequent requests.
+			if hallucinatedToolCallIDs[tc.ToolCallID] {
+				toolResult := message.ToolResult{
+					ToolCallID: tc.ToolCallID,
+					Name:       toolName,
+					Content:    "Error: The model attempted to call a tool without specifying a valid tool name. Please try again with a valid tool name.",
+					IsError:    true,
+				}
+				_, createErr := a.messages.Create(ctx, currentAssistant.SessionID, message.CreateMessageParams{
+					Role: message.Tool,
+					Parts: []message.ContentPart{
+						toolResult,
+					},
+				})
+				if createErr != nil {
+					return createErr
+				}
+			}
+			return nil
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
+			// Skip duplicate results for hallucinated tool calls that already
+			// received a synthetic error result in OnToolCall.
+			if hallucinatedToolCallIDs[result.ToolCallID] {
+				return nil
+			}
 			toolResult := a.convertToToolResult(result)
 			if sanitizedToolCalls[result.ToolCallID] {
 				toolResult.Content = "Tool call failed: arguments were not valid JSON. Please check your tool call format and try again."
