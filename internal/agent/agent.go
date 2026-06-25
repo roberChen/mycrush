@@ -56,6 +56,10 @@ const (
 	largeContextWindowThreshold = 200_000
 	largeContextWindowBuffer    = 20_000
 	smallContextWindowRatio     = 0.2
+
+	// badgeReInjectionRatio is the fraction of the context window that
+	// must be consumed between automatic badge re-injections.
+	badgeReInjectionRatio = 0.15
 )
 
 var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version.Version)
@@ -155,6 +159,14 @@ type Model struct {
 	FlatRate   bool
 }
 
+// badgeInjectionState tracks per-session badge injection timing so
+// the badge is re-injected periodically and after compaction.
+type badgeInjectionState struct {
+	mu                 sync.Mutex
+	lastInjectedTokens int64
+	needsInjection     bool
+}
+
 type sessionAgent struct {
 	largeModel         *csync.Value[Model]
 	smallModel         *csync.Value[Model]
@@ -172,6 +184,10 @@ type sessionAgent struct {
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, context.CancelFunc]
+
+	// badgeStates tracks per-session badge injection state so the
+	// badge is re-injected periodically and after compaction.
+	badgeStates *csync.Map[string, *badgeInjectionState]
 
 	// dispatchMu holds a per-session mutex that serializes the
 	// accepted -> (cancel-on-entry | queued | active) transition in
@@ -247,7 +263,19 @@ func NewSessionAgent(
 		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
 		acceptedRuns:         csync.NewMap[string, int](),
 		cancelMark:           csync.NewMap[string, uint64](),
+		badgeStates:          csync.NewMap[string, *badgeInjectionState](),
 	}
+}
+
+// getBadgeState returns the per-session badge injection state,
+// creating it lazily on first access.
+func (a *sessionAgent) getBadgeState(sessionID string) *badgeInjectionState {
+	if state, ok := a.badgeStates.Get(sessionID); ok {
+		return state
+	}
+	state := &badgeInjectionState{}
+	a.badgeStates.Set(sessionID, state)
+	return state
 }
 
 // AcceptedRun owns exactly one accept reservation taken by
@@ -859,6 +887,32 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 				prepared.Messages = append([]fantasy.Message{fantasy.NewSystemMessage(promptPrefix)}, prepared.Messages...)
 			}
 
+			// Badge reminder injection: re-inject the badge
+			// periodically (every badgeReInjectionRatio of the
+			// context window) or after compaction so critical
+			// session context survives context window eviction.
+			if currentSession.Badge != "" {
+				badgeState := a.getBadgeState(call.SessionID)
+				badgeState.mu.Lock()
+				cw := int64(largeModel.CatwalkCfg.ContextWindow)
+				currentTokens := currentSession.PromptTokens + currentSession.CompletionTokens
+				injectBadge := false
+				if badgeState.needsInjection {
+					injectBadge = true
+					badgeState.needsInjection = false
+				} else if cw > 0 && currentTokens-badgeState.lastInjectedTokens >= int64(float64(cw)*badgeReInjectionRatio) {
+					injectBadge = true
+				}
+				if injectBadge {
+					badgeMsg := fantasy.NewSystemMessage(
+						fmt.Sprintf("<badge-reminder>\n%s\n</badge-reminder>", currentSession.Badge),
+					)
+					prepared.Messages = append([]fantasy.Message{badgeMsg}, prepared.Messages...)
+					badgeState.lastInjectedTokens = currentTokens
+				}
+				badgeState.mu.Unlock()
+			}
+
 			sessionLock.Lock()
 			stepMessages = cloneFantasyMessages(prepared.Messages)
 			sessionLock.Unlock()
@@ -1464,6 +1518,15 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	_, err = a.sessions.Save(genCtx, currentSession)
 	if err != nil {
 		return err
+	}
+
+	// Flag the badge for re-injection after compaction so the
+	// model regains critical session context immediately.
+	if currentSession.Badge != "" {
+		badgeState := a.getBadgeState(sessionID)
+		badgeState.mu.Lock()
+		badgeState.needsInjection = true
+		badgeState.mu.Unlock()
 	}
 
 	// Release the active request before processing queued messages so that

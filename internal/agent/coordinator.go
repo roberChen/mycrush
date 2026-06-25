@@ -123,6 +123,9 @@ type coordinator struct {
 	activeSkills []*skills.Skill // Post-filter: active skills only.
 	skillTracker *skills.Tracker
 
+	// badgeReadTracker enforces read-before-update for badge tools.
+	badgeReadTracker *tools.BadgeReadTracker
+
 	readyWg errgroup.Group
 }
 
@@ -166,6 +169,8 @@ func NewCoordinator(
 		allSkills:    allSkills,
 		activeSkills: activeSkills,
 		skillTracker: skillTracker,
+
+		badgeReadTracker: tools.NewBadgeReadTracker(),
 	}
 
 	agentCfg, ok := cfg.Config().Agents[config.AgentCoder]
@@ -639,6 +644,8 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		tools.NewLsTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Tools.Ls),
 		tools.NewSourcegraphTool(nil),
 		tools.NewTodosTool(c.sessions),
+		tools.NewReadBadgeTool(c.sessions, c.badgeReadTracker),
+		tools.NewUpdateBadgeTool(c.sessions, c.badgeReadTracker),
 		tools.NewViewTool(c.lspManager, c.permissions, c.filetracker, c.skillTracker, c.cfg.WorkingDir(), c.cfg.Config().Options.SkillsPaths...),
 		tools.NewWriteTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
 	)
