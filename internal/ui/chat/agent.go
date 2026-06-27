@@ -296,7 +296,7 @@ func (r *CustomAgentToolRenderContext) RenderTool(sty *styles.Styles, width int,
 		paramParts = append(paramParts, key+": "+formatToolParam(val))
 	}
 
-	header := toolHeader(sty, opts.Status, opts.ToolCall.Name, cappedWidth, opts.Compact, paramParts...)
+	header := toolHeader(sty, opts.Status, opts.ToolCall.Name, cappedWidth, opts, paramParts...)
 	if opts.Compact {
 		return header
 	}
