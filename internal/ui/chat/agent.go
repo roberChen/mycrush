@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -191,8 +192,153 @@ func (r *AgentToolRenderContext) RenderTool(sty *styles.Styles, width int, opts 
 }
 
 // -----------------------------------------------------------------------------
-// Agentic Fetch Tool
+// Custom Agentic Tool
 // -----------------------------------------------------------------------------
+
+// CustomAgentToolMessageItem is a message item for user-defined custom agentic
+// tools. Like AgentToolMessageItem it implements NestedToolContainer so the UI
+// shows live sub-agent progress (tool calls inside the sub-agent) instead of a
+// static "waiting for output" spinner.
+type CustomAgentToolMessageItem struct {
+	*baseToolMessageItem
+	nestedTools []ToolMessageItem
+}
+
+var (
+	_ ToolMessageItem     = (*CustomAgentToolMessageItem)(nil)
+	_ NestedToolContainer = (*CustomAgentToolMessageItem)(nil)
+)
+
+// NewCustomAgentToolMessageItem creates a [CustomAgentToolMessageItem].
+func NewCustomAgentToolMessageItem(
+	sty *styles.Styles,
+	toolCall message.ToolCall,
+	result *message.ToolResult,
+	canceled bool,
+) *CustomAgentToolMessageItem {
+	t := &CustomAgentToolMessageItem{}
+	t.baseToolMessageItem = newBaseToolMessageItem(sty, toolCall, result, &CustomAgentToolRenderContext{tool: t}, canceled)
+	t.spinningFunc = func(state SpinningState) bool {
+		return !state.HasResult() && !state.IsCanceled()
+	}
+	return t
+}
+
+// Animate forwards animation ticks to nested children and bumps the parent
+// cache version so the inline tree re-renders.
+func (t *CustomAgentToolMessageItem) Animate(msg anim.StepMsg) tea.Cmd {
+	if t.result != nil || t.Status() == ToolStatusCanceled {
+		return nil
+	}
+	if msg.ID == t.ID() {
+		t.Bump()
+		return t.anim.Animate(msg)
+	}
+	for _, nestedTool := range t.nestedTools {
+		if msg.ID != nestedTool.ID() {
+			continue
+		}
+		if s, ok := nestedTool.(Animatable); ok {
+			t.Bump()
+			return s.Animate(msg)
+		}
+	}
+	return nil
+}
+
+// NestedTools returns the nested tool calls.
+func (t *CustomAgentToolMessageItem) NestedTools() []ToolMessageItem {
+	return t.nestedTools
+}
+
+// SetNestedTools sets the nested tool calls and bumps the cache version.
+func (t *CustomAgentToolMessageItem) SetNestedTools(tools []ToolMessageItem) {
+	t.nestedTools = tools
+	t.clearCache()
+	t.Bump()
+}
+
+// AddNestedTool adds a nested tool call.
+func (t *CustomAgentToolMessageItem) AddNestedTool(tool ToolMessageItem) {
+	if s, ok := tool.(Compactable); ok {
+		s.SetCompact(true)
+	}
+	t.nestedTools = append(t.nestedTools, tool)
+	t.clearCache()
+	t.Bump()
+}
+
+// CustomAgentToolRenderContext renders custom agentic tool messages.
+type CustomAgentToolRenderContext struct {
+	tool *CustomAgentToolMessageItem
+}
+
+// RenderTool implements the [ToolRenderer] interface. It mirrors
+// AgentToolRenderContext.RenderTool but uses the tool call's actual name and
+// renders the input parameters generically (key: value pairs) rather than
+// assuming an "agent" prompt field.
+func (r *CustomAgentToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
+	cappedWidth := cappedMessageWidth(width)
+
+	// While running with no nested tools yet, show the pending spinner.
+	if !opts.ToolCall.Finished && !opts.IsCanceled() && len(r.tool.nestedTools) == 0 {
+		return pendingTool(sty, opts.ToolCall.Name, opts.Anim, opts.Compact)
+	}
+
+	// Parse input params for display.
+	var input map[string]any
+	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &input)
+
+	var paramParts []string
+	for key, val := range input {
+		paramParts = append(paramParts, key+": "+formatToolParam(val))
+	}
+
+	header := toolHeader(sty, opts.Status, opts.ToolCall.Name, cappedWidth, opts.Compact, paramParts...)
+	if opts.Compact {
+		return header
+	}
+
+	// Build tree with nested tool calls.
+	childTools := tree.Root(header)
+	for _, nestedTool := range r.tool.nestedTools {
+		childView := nestedTool.Render(cappedWidth)
+		childTools.Child(childView)
+	}
+
+	var parts []string
+	parts = append(parts, childTools.Enumerator(roundedEnumerator(2, 0)).String())
+
+	// Show animation if still running.
+	if !opts.HasResult() && !opts.IsCanceled() {
+		parts = append(parts, "", opts.Anim.Render())
+	}
+
+	result := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	// Add body content when completed.
+	if opts.HasResult() && opts.Result.Content != "" {
+		body := toolOutputMarkdownContent(sty, opts.Result.Content, cappedWidth-toolBodyLeftPaddingTotal, opts.ExpandedContent)
+		return joinToolParts(result, body)
+	}
+
+	return result
+}
+
+// formatToolParam renders a parameter value as a short string for display in
+// the tool header.
+func formatToolParam(val any) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	default:
+		bytes, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(bytes)
+	}
+}
 
 // AgenticFetchToolMessageItem is a message item that represents an agentic fetch tool call.
 type AgenticFetchToolMessageItem struct {

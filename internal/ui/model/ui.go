@@ -1246,10 +1246,20 @@ func (m *UI) loadNestedToolCalls(items []chat.MessageItem) {
 			continue
 		}
 
-		// Build tool result map for nested messages.
-		nestedMsgPtrs := make([]*message.Message, len(nestedMsgs))
+		// Build tool result map for nested messages, skipping inherited
+		// parent messages. The offset marks where the sub-agent's own
+		// messages begin; everything before it was copied from the parent
+		// session and should not be rendered as nested tool calls.
+		inheritedOffset := m.com.Workspace.GetInheritedMessageCount(agentSessionID)
+		var nestedMsgPtrs []*message.Message
 		for i := range nestedMsgs {
-			nestedMsgPtrs[i] = &nestedMsgs[i]
+			if i < inheritedOffset {
+				continue
+			}
+			nestedMsgPtrs = append(nestedMsgPtrs, &nestedMsgs[i])
+		}
+		if len(nestedMsgPtrs) == 0 {
+			continue
 		}
 		nestedToolResultMap := chat.BuildToolResultMap(nestedMsgPtrs)
 

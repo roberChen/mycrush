@@ -26,6 +26,10 @@ type Prompt struct {
 	now        func() time.Time
 	platform   string
 	workingDir string
+	// allowedSkills, when non-empty, restricts the skills advertised in the
+	// generated prompt's <available_skills> block to the named subset. Empty
+	// means "advertise every active skill" (the default behavior).
+	allowedSkills []string
 }
 
 type PromptDat struct {
@@ -64,6 +68,17 @@ func WithPlatform(platform string) Option {
 func WithWorkingDir(workingDir string) Option {
 	return func(p *Prompt) {
 		p.workingDir = workingDir
+	}
+}
+
+// WithAllowedSkills restricts the skills advertised in the generated system
+// prompt (the <available_skills> block) to the given names. An empty or nil
+// slice leaves all active skills advertised. Unknown names are silently
+// dropped. This is used by custom agentic tools whose definition names the
+// skills their sub-agent should see.
+func WithAllowedSkills(names []string) Option {
+	return func(p *Prompt) {
+		p.allowedSkills = names
 	}
 }
 
@@ -200,6 +215,12 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 	// Filter out disabled skills.
 	allSkills = skills.Filter(allSkills, cfg.Options.DisabledSkills)
 
+	// Restrict to the caller's allow-list, if any (e.g. a custom agentic
+	// tool that names the skills its sub-agent may use).
+	if len(p.allowedSkills) > 0 {
+		allSkills = filterSkillsByName(allSkills, p.allowedSkills)
+	}
+
 	if len(allSkills) > 0 {
 		availSkillXML = skills.ToPromptXML(allSkills)
 	}
@@ -291,4 +312,20 @@ func getGitRecentCommits(ctx context.Context, sh *shell.Shell) (string, error) {
 
 func (p *Prompt) Name() string {
 	return p.name
+}
+
+// filterSkillsByName keeps only skills whose Name appears in allowed,
+// preserving the input order.
+func filterSkillsByName(all []*skills.Skill, allowed []string) []*skills.Skill {
+	keep := make(map[string]bool, len(allowed))
+	for _, n := range allowed {
+		keep[n] = true
+	}
+	out := make([]*skills.Skill, 0, len(all))
+	for _, s := range all {
+		if keep[s.Name] {
+			out = append(out, s)
+		}
+	}
+	return out
 }

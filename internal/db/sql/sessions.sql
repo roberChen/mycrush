@@ -62,6 +62,12 @@ SET
     updated_at = strftime('%s', 'now')
 WHERE id = ?;
 
+-- name: UpdateSessionInheritedCount :exec
+UPDATE sessions
+SET
+    inherited_message_count = ?
+WHERE id = ?;
+
 
 -- name: RenameSession :exec
 UPDATE sessions

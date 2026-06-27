@@ -33,7 +33,7 @@ INSERT INTO sessions (
     null,
     strftime('%s', 'now'),
     strftime('%s', 'now')
-) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, inherited_message_count
 `
 
 type CreateSessionParams struct {
@@ -69,6 +69,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.InheritedMessageCount,
 	)
 	return i, err
 }
@@ -84,7 +85,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getLastSession = `-- name: GetLastSession :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, inherited_message_count
 FROM sessions
 ORDER BY updated_at DESC
 LIMIT 1
@@ -93,7 +94,7 @@ LIMIT 1
 func (q *Queries) GetLastSession(ctx context.Context) (Session, error) {
 	row := q.queryRow(ctx, q.getLastSessionStmt, getLastSession)
 	var i Session
-	err := row.Scan(
+		err := row.Scan(
 		&i.ID,
 		&i.ParentSessionID,
 		&i.Title,
@@ -105,12 +106,13 @@ func (q *Queries) GetLastSession(ctx context.Context) (Session, error) {
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.InheritedMessageCount,
 	)
 	return i, err
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, inherited_message_count
 FROM sessions
 WHERE id = ? LIMIT 1
 `
@@ -118,7 +120,7 @@ WHERE id = ? LIMIT 1
 func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error) {
 	row := q.queryRow(ctx, q.getSessionByIDStmt, getSessionByID, id)
 	var i Session
-	err := row.Scan(
+		err := row.Scan(
 		&i.ID,
 		&i.ParentSessionID,
 		&i.Title,
@@ -130,12 +132,13 @@ func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.InheritedMessageCount,
 	)
 	return i, err
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, inherited_message_count
 FROM sessions
 WHERE parent_session_id is NULL
 ORDER BY updated_at DESC
@@ -162,6 +165,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.CreatedAt,
 			&i.SummaryMessageID,
 			&i.Todos,
+			&i.InheritedMessageCount,
 		); err != nil {
 			return nil, err
 		}
@@ -203,7 +207,7 @@ SET
     cost = ?,
     todos = ?
 WHERE id = ?
-RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, inherited_message_count
 `
 
 type UpdateSessionParams struct {
@@ -239,6 +243,7 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (S
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.InheritedMessageCount,
 	)
 	return i, err
 }
@@ -268,6 +273,26 @@ func (q *Queries) UpdateSessionTitleAndUsage(ctx context.Context, arg UpdateSess
 		arg.PromptTokens,
 		arg.CompletionTokens,
 		arg.Cost,
+		arg.ID,
+	)
+	return err
+}
+
+const updateSessionInheritedCount = `-- name: UpdateSessionInheritedCount :exec
+UPDATE sessions
+SET
+    inherited_message_count = ?
+WHERE id = ?
+`
+
+type UpdateSessionInheritedCountParams struct {
+	InheritedMessageCount int64  `json:"inherited_message_count"`
+	ID                    string `json:"id"`
+}
+
+func (q *Queries) UpdateSessionInheritedCount(ctx context.Context, arg UpdateSessionInheritedCountParams) error {
+	_, err := q.exec(ctx, q.updateSessionInheritedCountStmt, updateSessionInheritedCount,
+		arg.InheritedMessageCount,
 		arg.ID,
 	)
 	return err
