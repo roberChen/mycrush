@@ -19,6 +19,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
+	"github.com/charmbracelet/crush/internal/agent/customtools"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
@@ -129,6 +130,11 @@ type coordinator struct {
 	activeSkills []*skills.Skill // Post-filter: active skills only.
 	skillTracker *skills.Tracker
 
+	// customTools are the user-defined custom agentic tool definitions
+	// discovered at startup. They are registered for the top-level agent
+	// and may also be allow-listed by a sub-agent's tool definition.
+	customTools []*customtools.Definition
+
 	readyWg errgroup.Group
 }
 
@@ -164,6 +170,23 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 	}
 	skillTracker := skills.NewTracker(activeSkills)
 
+	// Discover user-defined custom agentic tool definitions. Failures for
+	// individual files are reported via the returned states and logged but
+	// never abort startup.
+	customToolDefs, customToolStates := customtools.Discover(opts.Config.Config().Options.CustomAgentToolsPaths)
+	for _, st := range customToolStates {
+		if st.State == customtools.StateError {
+			slog.Warn("Failed to load custom agentic tool", "path", st.Path, "error", st.Err)
+		} else {
+			slog.Debug("Loaded custom agentic tool", "name", st.Name, "path", st.Path)
+		}
+	}
+	// Register tool names so the UI layer can render them with live
+	// sub-agent progress (nested tool calls) instead of a static spinner.
+	for _, def := range customToolDefs {
+		customtools.RegisterToolName(def.Name)
+	}
+
 	c := &coordinator{
 		cfg:          opts.Config,
 		sessions:     opts.Sessions,
@@ -180,6 +203,7 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 		activeSkills: activeSkills,
 		skillTracker: skillTracker,
 		interactive:  opts.Interactive,
+		customTools:  customToolDefs,
 	}
 
 	agentCfg, ok := opts.Config.Config().Agents[config.AgentCoder]
@@ -691,6 +715,13 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		allTools = append(allTools, agenticFetchTool)
 	}
 
+	// Register user-defined custom agentic tools. They are constructed lazily
+	// (no sub-agent is built until Run), so building them here for every agent
+	// — including a custom tool's own sub-agent — cannot recurse.
+	for _, def := range c.customTools {
+		allTools = append(allTools, c.newCustomAgenticTool(def))
+	}
+
 	// Get the model name for the agent
 	modelID := ""
 	if modelCfg, ok := c.cfg.Config().Models[agent.Model]; ok {
@@ -754,9 +785,22 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		)
 	}
 
+	// Compute the effective tool allow-list. Custom agentic tools are
+	// user-defined and opt-in by their mere existence, so the top-level
+	// (coder) agent gets all of them automatically; a sub-agent must list a
+	// custom tool name explicitly in its allowed_tools to use it.
+	allowedTools := agent.AllowedTools
+	if !isSubAgent {
+		for _, def := range c.customTools {
+			if !slices.Contains(allowedTools, def.Name) {
+				allowedTools = append(allowedTools, def.Name)
+			}
+		}
+	}
+
 	var filteredTools []fantasy.AgentTool
 	for _, tool := range allTools {
-		if slices.Contains(agent.AllowedTools, tool.Info().Name) {
+		if slices.Contains(allowedTools, tool.Info().Name) {
 			filteredTools = append(filteredTools, tool)
 		}
 	}
