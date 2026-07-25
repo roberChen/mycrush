@@ -805,6 +805,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Resource.BusyIcon = s.Resource.OfflineIcon.Foreground(o.busy)
 	s.Resource.ErrorIcon = s.Resource.OfflineIcon.Foreground(o.destructive)
 	s.Resource.OnlineIcon = s.Resource.OfflineIcon.Foreground(o.successMostSubtle)
+	s.Resource.NeedsAuthIcon = s.Resource.OfflineIcon.Foreground(o.info)
 	s.Resource.DisabledIcon = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).SetString("●")
 	s.Resource.AdditionalText = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.Resource.CapabilityCount = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
@@ -940,6 +941,7 @@ func quickStyle(o quickStyleOpts) Styles {
 
 	// Dialog.Quit
 	s.Dialog.Quit.Content = lipgloss.NewStyle().Foreground(o.fgBase)
+	s.Dialog.Quit.Hint = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.Dialog.Quit.Frame = lipgloss.NewStyle().BorderForeground(o.primary).Border(lipgloss.RoundedBorder()).Padding(1, 2)
 	s.Dialog.View = base.Border(lipgloss.RoundedBorder()).BorderForeground(o.primary)
 	s.Dialog.PrimaryText = base.Padding(0, 1).Foreground(o.primary)
@@ -1026,8 +1028,14 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Attachments.Image = attachmentIconStyle.SetString(ImageIcon)
 	s.Attachments.Text = attachmentIconStyle.SetString(TextIcon)
 	s.Attachments.Skill = attachmentIconStyle.SetString(SkillIcon)
-	s.Attachments.Normal = base.Padding(0, 1).MarginRight(1).Background(o.fgMoreSubtle).Foreground(o.fgBase)
-	s.Attachments.Deleting = base.Padding(0, 1).Bold(true).Background(o.destructive).Foreground(o.fgBase)
+	s.Attachments.Normal = base.Padding(0, 1).Background(o.fgMoreSubtle).Foreground(o.fgBase)
+	// Remove and Deleting share the same slot on the right side of a chip
+	// and must keep the same geometry so toggling delete-mode doesn't
+	// shift the chips. Padding(0, 1) puts a colored cell on each side of the
+	// glyph so it isn't flush against the box edge, while MarginRight(1)
+	// keeps a transparent gap between adjacent chips.
+	s.Attachments.Remove = base.Padding(0, 1).MarginRight(1).Background(o.bgLessVisible).Foreground(o.fgSubtle).SetString(RemoveIcon)
+	s.Attachments.Deleting = base.Padding(0, 1).MarginRight(1).Bold(true).Background(o.destructive).Foreground(o.fgBase)
 
 	// Pills styles
 	s.Pills.Base = base.Padding(0, 1)
