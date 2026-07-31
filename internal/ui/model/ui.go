@@ -27,6 +27,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/crush/internal/agent/customtools"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	agenttools "github.com/charmbracelet/crush/internal/agent/tools"
@@ -295,6 +296,10 @@ type UI struct {
 	// skills
 	skillStates []*skills.SkillState
 
+	// custom agentic tools discovered at startup
+	customToolDefs   []*customtools.Definition
+	customToolStates []*customtools.State
+
 	// sidebarLogo keeps a cached version of the sidebar sidebarLogo.
 	sidebarLogo string
 
@@ -436,6 +441,14 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 
 	header := newHeader(com)
 
+	// Discover user-defined custom agentic tools for the sidebar, mirroring
+	// the coordinator's startup discovery.
+	var customToolDefs []*customtools.Definition
+	var customToolStates []*customtools.State
+	if cfg := com.Config(); cfg != nil {
+		customToolDefs, customToolStates = customtools.Discover(cfg.Options.CustomAgentToolsPaths)
+	}
+
 	ui := &UI{
 		com:                 com,
 		dialog:              dialog.NewOverlay(),
@@ -453,6 +466,8 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		initialSessionID:    initialSessionID,
 		continueLastSession: continueLast,
 		skillStates:         skills.GetLatestStates(),
+		customToolDefs:      customToolDefs,
+		customToolStates:    customToolStates,
 	}
 
 	status := NewStatus(com, ui)
@@ -4961,8 +4976,9 @@ func (m *UI) drawSessionDetails(scr uv.Screen, area uv.Rectangle) {
 	lspSection := m.lspInfo(sectionWidth, maxItemsPerSection, false)
 	mcpSection := m.mcpInfo(sectionWidth, maxItemsPerSection, false)
 	skillsSection := m.skillsInfo(sectionWidth, maxItemsPerSection, false)
+	customToolsSection := m.customToolsInfo(sectionWidth, maxItemsPerSection, false)
 	filesSection := m.filesInfo(m.com.Workspace.WorkingDir(), sectionWidth, maxItemsPerSection, false)
-	sections := lipgloss.JoinHorizontal(lipgloss.Top, filesSection, " ", lspSection, " ", mcpSection, " ", skillsSection)
+	sections := lipgloss.JoinHorizontal(lipgloss.Top, filesSection, " ", lspSection, " ", mcpSection, " ", skillsSection, " ", customToolsSection)
 	uv.NewStyledString(
 		s.CompactDetails.View.
 			Width(area.Dx()).
