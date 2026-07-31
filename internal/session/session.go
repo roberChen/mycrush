@@ -48,18 +48,19 @@ func HasIncompleteTodos(todos []Todo) bool {
 }
 
 type Session struct {
-	ID               string
-	ParentSessionID  string
-	Title            string
-	MessageCount     int64
-	PromptTokens     int64
-	CompletionTokens int64
-	EstimatedUsage   bool
-	SummaryMessageID string
-	Cost             float64
-	Todos            []Todo
-	CreatedAt        int64
-	UpdatedAt        int64
+	ID                     string
+	ParentSessionID        string
+	Title                  string
+	MessageCount           int64
+	PromptTokens           int64
+	CompletionTokens       int64
+	EstimatedUsage         bool
+	SummaryMessageID       string
+	Cost                   float64
+	Todos                  []Todo
+	InheritedMessageCount  int64
+	CreatedAt              int64
+	UpdatedAt              int64
 }
 
 type Service interface {
@@ -72,6 +73,7 @@ type Service interface {
 	List(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
+	SetInheritedCount(ctx context.Context, sessionID string, count int64) error
 	Rename(ctx context.Context, id string, title string) error
 	Delete(ctx context.Context, id string) error
 
@@ -249,6 +251,13 @@ func (s *service) Rename(ctx context.Context, id string, title string) error {
 	return nil
 }
 
+func (s *service) SetInheritedCount(ctx context.Context, sessionID string, count int64) error {
+	return s.q.UpdateSessionInheritedCount(ctx, db.UpdateSessionInheritedCountParams{
+		InheritedMessageCount: count,
+		ID:                    sessionID,
+	})
+}
+
 func (s *service) List(ctx context.Context) ([]Session, error) {
 	dbSessions, err := s.q.ListSessions(ctx)
 	if err != nil {
@@ -310,6 +319,7 @@ func (s *service) fromDBItem(item db.Session) Session {
 		SummaryMessageID: item.SummaryMessageID.String,
 		Cost:             item.Cost,
 		Todos:            todos,
+		InheritedMessageCount: item.InheritedMessageCount,
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,
 	}
